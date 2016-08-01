@@ -19,13 +19,13 @@
 '''
 
 from datetime import datetime, timedelta
-from pylogix.lgxDevice import *
+from lgxDevice import *
 from random import randrange
 import socket
-from struct import pack, unpack, unpack_from
+from struct import pack, unpack, unpack_from, calcsize
 import sys
 import time
-from thread import start_new_thread
+from threading import Thread
 
 
 taglist = []
@@ -38,18 +38,18 @@ class PLC():
     '''
     Initialize our parameters
     '''
-    self.ClientIPAddress = ""
-    self.ServerIPAddress = ""
+    self.IPAddress = ""
+#    self.ServerIPAddress = ""
     self.ProcessorSlot = 0
-    self.ClientPort = 44818
-    self.ServerPort = 44817
+    self.Port = 44818
+#    self.ServerPort = 44817
     self.VendorID = 0x1337
     self.Context = 0x00
     self.ContextPointer = 0
-    self.ClientSocket = socket.socket()
-    self.ServerSocket = socket.socket()
-    self.ClientSocket.settimeout(0.5)
-    self.ClientSocketConnected = False
+    self.Socket = socket.socket()
+#    self.ServerSocket = socket.socket()
+    self.Socket.settimeout(0.5)
+    self.SocketConnected = False
     self.OTNetworkConnectionID=None
     self.SessionHandle = 0x0000
     self.SessionRegistered = False
@@ -70,10 +70,10 @@ class PLC():
 
 
     # Bind the server socket
-    self.Bind_Socket()
+    # self.Bind_Socket()
 
     # Start listening on socket
-    self.ServerSocket.listen(10)
+    #self.ServerSocket.listen(10)
 
   def Client_Thread(self, *args):
     '''
@@ -91,10 +91,11 @@ class PLC():
         # request the info from the database :
         #reply =
 
+  '''
   def Bind_Socket(self, *args):
-    '''
-    Simple function to try and bind the socket to the host
-    '''
+  '''
+    #Simple function to try and bind the socket to the host
+  '''
 
     try:
 
@@ -103,7 +104,7 @@ class PLC():
     except socket.error as msg:
 
       print ("Bind Failed. Error Code : {0[0]} Message {0[1]}".format(msg))
-
+  '''
 
   def Read(self, *args):
     '''
@@ -151,7 +152,7 @@ class PLC():
     '''
     Retrieves the tag list from the PLC
     '''
-    return _getTagList(sel_connectf)
+    return _getTagList(self)
 
 
   def Discover(self):
@@ -175,7 +176,7 @@ def _readTag(self, tag, elements):
   '''
   processes the read request
   '''
-  if not self.ClientSocketConnected: _connect(self)
+  if not self.SocketConnected: _connect(self)
 
 
   t,b,i = TagNameParser(tag, 0)
@@ -190,8 +191,8 @@ def _readTag(self, tag, elements):
 
   readRequest = _addReadIOI(self, tagData, elements)
   eipHeader = _buildEIPHeader(self, readRequest)
-  self.ClientSocket.send(eipHeader)
-  retData = self.ClientSocket.recv(1024)
+  self.Socket.send(eipHeader)
+  retData = self.Socket.recv(1024)
   return _parseReply(self, tag, elements, retData)
 
 
@@ -200,7 +201,7 @@ def _writeTag(self, tag, value, elements):
   '''
   Processes the write request
   '''
-  if not self.ClientSocketConnected: _connect(self)
+  if not self.SocketConnected: _connect(self)
 
 
   t,b,i = TagNameParser(tag, 0)
@@ -220,7 +221,7 @@ def _writeTag(self, tag, value, elements):
     else:
       writeData.append(int(value))
   elif elements > 1:
-    for i in xrange(elements):
+    for i in range(elements):
       writeData.append(int(value[i]))
   else:
       print ("Fix this")
@@ -236,8 +237,8 @@ def _writeTag(self, tag, value, elements):
 
 
   eipHeader = _buildEIPHeader(self, writeRequest)
-  self.ClientSocket.send(eipHeader)
-  retData = self.ClientSocket.recv(1024)
+  self.Socket.send(eipHeader)
+  retData = self.Socket.recv(1024)
 
 
 
@@ -248,10 +249,10 @@ def _multiRead(self, args):
   serviceSegments = []
   segments = ""
   tagCount = len(args)
-  if not self.ClientSocketConnected: _connect(self)
+  if not self.SocketConnected: _connect(self)
 
 
-  for i in xrange(tagCount):
+  for i in range(tagCount):
     t,b,i = TagNameParser(args[i], 0)
     if b not in self.KnownTags: InitialRead(self, t, b)
 
@@ -272,19 +273,19 @@ def _multiRead(self, args):
 
 
   # assemble all the segments
-  for i in xrange(tagCount):
+  for i in range(tagCount):
     segments += serviceSegments[i]
 
 
-  for i in xrange(tagCount-1):
+  for i in range(tagCount-1):
     temp += len(serviceSegments[i])
     offsets += pack('<H', temp)
 
 
   readRequest = header+segmentCount+offsets+segments
   eipHeader = _buildEIPHeader(self, readRequest)
-  self.ClientSocket.send(eipHeader)
-  retData = self.ClientSocket.recv(1024)
+  self.Socket.send(eipHeader)
+  retData = self.Socket.recv(1024)
 
 
   return MultiParser(self, retData)
@@ -294,7 +295,7 @@ def _multiRead(self, args):
 def _getPLCTime(self):
   '''Connect to the PLC
   '''
-  if not self.ClientSocketConnected: _connect(self)
+  if not self.SocketConnected: _connect(self)
 
 
   AttributeService = 0x03
@@ -325,10 +326,11 @@ def _getPLCTime(self):
   eipHeader = _buildEIPHeader(self, AttributePacket)
 
 
-  self.ClientSocket.send(eipHeader)
-  retData = self.ClientSocket.recv(1024)
-  # get the time from the packet
-  plcTime = unpack_from('<Q', retData, 56)[0]
+  self.Socket.send(eipHeader)
+  retData = self.Socket.recv(1024)
+  print (calcsize(retData))
+  # get the time from the packe
+  plcTime = unpack_from('<Q', retData, 0)[0]
   # get the timezone offset from the packet (this will include sign)
   timezoneOffset = int(retData[75:78])
   # get daylight savings setting from packet (at the end)
@@ -350,22 +352,22 @@ def _getTagList(self):
    that all of the tags don't fit in a single packet
   '''
 
-  if not self.ClientSocketConnected: _connect(self)
+  if not self.SocketConnected: _connect(self)
 
 
   forwardOpenFrame = _buildTagRequestPacket(self, partial=False)
 
 
-  self.ClientSocket.send(forwardOpenFrame)
-  ret = self.ClientSocket.recv(1024)
+  self.Socket.send(forwardOpenFrame)
+  ret = self.Socket.recv(1024)
   status = unpack_from('<h', ret, 42)[0]
   extractTagPacket(self, ret)
 
 
   while status == 6:
     forwardOpenFrame = _buildTagRequestPacket(self, partial=True)
-    self.ClientSocket.send(forwardOpenFrame)
-    ret = self.ClientSocket.recv(1024)
+    self.Socket.send(forwardOpenFrame)
+    ret = self.Socket.recv(1024)
     extractTagPacket(self, ret)
     status = unpack_from('<h', ret, 42)[0]
     time.sleep(0.25)
@@ -434,32 +436,32 @@ def _connect(self):
   '''
   Open our initial connection to the PLC
   '''
-  self.ClientSocketConnected = False
+  self.SocketConnected = False
 
 
   try:
 
-    self.ClientSocket.connect((self.ClientIPAddress, self.ClientPort))
-    self.ClientSocketConnected = True
+    self.Socket.connect((self.IPAddress, self.Port))
+    self.SocketConnected = True
 
   except:
 
-    self.ClientSocketConnected = False
-    print ("Failed to connect to", self.ClientIPAddress, ". Abandoning Ship!")
+    self.SocketConnected = False
+    print ("Failed to connect to", self.IPAddress, ". Abandoning Ship!")
     sys.exit(0)
 
 
-  if self.ClientSocketConnected:
+  if self.SocketConnected:
     # If our connection was successful, register session
-    self.ClientSocket.send(_buildRegisterSession(self))
-    retData = self.ClientSocket.recv(1024)
+    self.Socket.send(_buildRegisterSession(self))
+    retData = self.Socket.recv(1024)
     self.SessionHandle = unpack_from('<I', retData, 4)[0]
     self.SessionRegistered = True
 
 
     # Forward Open
-    self.ClientSocket.send(_buildForwardOpenPacket(self))
-    retData = self.ClientSocket.recv(1024)
+    self.Socket.send(_buildForwardOpenPacket(self))
+    retData = self.Socket.recv(1024)
     tempID = unpack_from('<I', retData, 44)
     self.OTNetworkConnectionID = tempID[0]
 
@@ -670,7 +672,7 @@ def _buildTagIOI(self, tagName, isBoolArray):
 
 
   # this loop figures out the packet length and builds our packet
-  for i in xrange(len(tagArray)):
+  for i in range(len(tagArray)):
     if tagArray[i].endswith("]"):
       RequestPathSize += 1				# add a word for 0x91 and len
       tag, basetag, index = TagNameParser(tagArray[i], 0)
@@ -697,7 +699,7 @@ def _buildTagIOI(self, tagName, isBoolArray):
             RequestPathSize += 2				# add 2 words for array for index
             RequestTagData += pack('<BBH', 0x29, 0x00, index) # add 2 words to packet
         else:
-          for i in xrange(len(index)):
+          for i in range(len(index)):
             if index[i] < 256:					# if index is 1 byte...
               RequestPathSize += 1				# add word for array index
               RequestTagData += pack('<BB', 0x28, index[i])	# add one word to packet
@@ -782,7 +784,7 @@ def _addWriteIOI(self, tagIOI, writeData, dataType, elements):
 
   CIPWriteRequest += pack('<BBH', dataType, TypeCodeLen, RequestNumberOfElements)
 
-  for i in xrange(len(writeData)):
+  for i in range(len(writeData)):
       el = writeData[i]
       CIPWriteRequest += pack(self.CIPTypes[dataType][2],el)
 
@@ -990,7 +992,7 @@ def _parseReply(self, tag, elements, data):
       counter = 0					# counter for indexing through packet
       self.Offset = 0				# offset for next packet request
       stringLen = self.KnownTags[basetag][1]-30	# get the stored length (only for string)
-      for i in xrange(elements):
+      for i in range(elements):
         index = 52+(counter*dataSize)		# location of data in packet
         self.Offset += dataSize
 
@@ -1015,8 +1017,8 @@ def _parseReply(self, tag, elements, data):
           readIOI = _addPartialReadIOI(self, tagIOI, elements)
           eipHeader = _buildEIPHeader(self, readIOI)
 
-          self.ClientSocket.send(eipHeader)
-          data = self.ClientSocket.recv(1024)
+          self.Socket.send(eipHeader)
+          data = self.Socket.recv(1024)
           status = unpack_from('<h', data, 48)[0]
           numbytes = len(data)-dataSize
 
@@ -1082,8 +1084,8 @@ def InitialRead(self, tag, baseTag):
   eipHeader = _buildEIPHeader(self, readRequest)
 
   # send our tag read request
-  self.ClientSocket.send(eipHeader)
-  retData = self.ClientSocket.recv(1024)
+  self.Socket.send(eipHeader)
+  retData = self.Socket.recv(1024)
   dataType = unpack_from('<B', retData, 50)[0]
   dataLen = unpack_from('<H', retData, 2)[0] # this is really just used for STRING
   self.KnownTags[baseTag] = (dataType, dataLen)
@@ -1120,7 +1122,7 @@ def TagNameParser(tag, offset):
         # if we have a multi dim array, return the index
         ind = []
 
-        for i in xrange(len(s)):
+        for i in range(len(s)):
 
           s[i] = int(s[i])
           ind.append(s[i])
@@ -1149,7 +1151,7 @@ def MultiParser(self, data):
 
     # get the offset values for each of the tags in the packet
     reply = []
-    for i in xrange(tagCount):
+    for i in range(tagCount):
         loc = 2+(i*2)					# pointer to offset
         offset = unpack_from('<H', stripped, loc)[0]	# get offset
         replyStatus = unpack_from('<b', stripped, offset+2)[0]
@@ -1176,7 +1178,7 @@ def MakeString(string):
         work.append(ord(char))
     for char in string:
         work.append(ord(char))
-    for x in xrange(len(string),84):
+    for x in range(len(string),84):
         work.append(0x00)
     return work
 

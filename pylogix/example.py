@@ -2,21 +2,21 @@
 Just a few examples of how to do some
 basic things with the PLC
 '''
-from pylogix.eip import PLC
+from eip import PLC
 
 def ex_read(tag):
   '''
   simple tag read
   '''
   ret = comm.Read(tag)
-  print ret
+  print (ret)
 
 def ex_readArray(tag, length):
   '''
   read tag array
   '''
   ret = comm.Read(tag, length)
-  print ret
+  print (ret)
 
 def ex_multiRead():
   '''
@@ -25,7 +25,7 @@ def ex_multiRead():
   tag1 = "DatabasePointer"
   tag2 = "ProductPointer"
   ret = comm.MultiRead(tag1, tag2)
-  print ret
+  print (ret)
 
 def ex_write(tag, value):
   '''
@@ -38,24 +38,24 @@ def ex_getPLCTime():
   get the PLC's clock time
   '''
   ret = comm.GetPLCTime()
-  print ret
+  print (ret)
 
 def ex_discover():
   '''
   discover all the Ethernet I/P devices on the network and print the
   results
   '''
-  print "Discovering Ethernet I/P devices, please wait..."
+  print ("Discovering Ethernet I/P devices, please wait...")
   device = comm.Discover()
-  print "Total number of devices found (in no particular order):", len(device)
-  print ""
+  print ("Total number of devices found (in no particular order):", len(device))
+  print ("")
 
-  for i in xrange(len(device)):
-    print '(' + str(i+1) + ') ' + device[i].IPAddress
-    print "     ProductName/Code - ", device[i].ProductName, "(" + str(device[i].ProductCode) + ")"
-    print "     Vendor/DeviceID  - ", device[i].Vendor, "(" + str(device[i].DeviceID) + ")"
-    print "     Revision/Serial  - ", device[i].Revision, device[i].SerialNumber
-    print ""
+  for i in range(len(device)):
+    print ('(' + str(i+1) + ') ' + device[i].IPAddress)
+    print ("     ProductName/Code - ", device[i].ProductName, "(" + str(device[i].ProductCode) + ")")
+    print ("     Vendor/DeviceID  - ", device[i].Vendor, "(" + str(device[i].DeviceID) + ")")
+    print ("     Revision/Serial  - ", device[i].Revision, device[i].SerialNumber)
+    print ("")
 
 def ex_getTags():
   '''
@@ -86,7 +86,7 @@ def ex_getTags():
 
 # define our communication
 comm = PLC()
-comm.IPAddress = '192.168.1.10'
+comm.IPAddress = '192.168.250.1'
 #comm.ProcessorSlot = 2
 
 # uncomment one of the examples.
@@ -95,5 +95,5 @@ comm.IPAddress = '192.168.1.10'
 #ex_multiRead()
 #ex_write('ThisTag.Thingy', '107')
 #ex_getPLCTime()
-#ex_discover()
-#ex_getTags()
+ex_discover()
+ex_getTags()
