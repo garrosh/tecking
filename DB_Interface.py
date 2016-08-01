@@ -31,7 +31,7 @@ class DB_Interface(QObject):
 
   def build_tracking_table(self):
     self.tracking_cursor.execute('''CREATE TABLE tracking
-                                    (Alarm.Activated DINT, User.Actual INT, Position.Left BOOL, Position.Right BOOL, Temperature.Actual REAL, Time.Production.Begin TIME, Time.Production.End TIME)''')
+                                    (Alarm.Activated DINT, User.Actual INT, Position.Left BOOL, Position.Right BOOL, Temperature.Actual REAL, Timer.Production.Begin TIME, Timer.Production.End TIME)''')
     self.conn.commit()
 
   def recipe_table_addline(self):
