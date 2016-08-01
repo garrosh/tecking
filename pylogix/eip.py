@@ -22,9 +22,10 @@ from datetime import datetime, timedelta
 from pylogix.lgxDevice import *
 from random import randrange
 import socket
-from struct import *
+from struct import pack, unpack, unpack_from
 import sys
 import time
+from thread import start_new_thread
 
 
 taglist = []
@@ -38,7 +39,7 @@ class PLC():
     Initialize our parameters
     '''
     self.ClientIPAddress = ""
-    self.ServerIPAddress = {}
+    self.ServerIPAddress = ""
     self.ProcessorSlot = 0
     self.ClientPort = 44818
     self.ServerPort = 44817
@@ -46,6 +47,7 @@ class PLC():
     self.Context = 0x00
     self.ContextPointer = 0
     self.ClientSocket = socket.socket()
+    self.ServerSocket = socket.socket()
     self.ClientSocket.settimeout(0.5)
     self.ClientSocketConnected = False
     self.OTNetworkConnectionID=None
@@ -67,6 +69,40 @@ class PLC():
                     197:(8, "LINT", 'Q')}
 
 
+    # Bind the server socket
+    self.Bind_Socket()
+
+    # Start listening on socket
+    self.ServerSocket.listen(10)
+
+  def Client_Thread(self, *args):
+    '''
+    Function for handling connections from the PLCs
+    Used to create threads
+    '''
+    if len(args) == 1:
+      while True:
+        # Recieve from client
+
+        data = args[0].recv(1024)
+        # Find the tag requested from the data recieved
+        # Check if the tag format is already known
+          # If not, query to get the tag format and store it
+        # request the info from the database :
+        #reply =
+
+  def Bind_Socket(self, *args):
+    '''
+    Simple function to try and bind the socket to the host
+    '''
+
+    try:
+
+      self.ServerSocket.bind(self.ServerIPAddress, self.ServerPort)
+
+    except socket.error as msg:
+
+      print ("Bind Failed. Error Code : {0[0]} Message {0[1]}".format(msg))
 
 
   def Read(self, *args):
@@ -586,7 +622,7 @@ def _buildCIPUnconnectedSend(partial):
   build unconnected send to request tag database
   '''
   CIPService = 0x52                           #(B) CIP Unconnected Send           Vol 3 (3-5.5.2)(3-5.5)
-  CIPPathSize = 0x02               		#(B) Request Path zize              (2-4.1)
+  CIPPathSize = 0x02                          #(B) Request Path zize              (2-4.1)
   CIPClassType = 0x20                         #(B) Segment type                   (C-1.1)(C-1.4)(C-1.4.2)
                                               #[Logical Segment][Class ID][8 bit addressing]
   CIPClass = 0x06                             #(B) Connection Manager Object      (3-5)
@@ -715,8 +751,8 @@ def _addPartialReadIOI(self, tagIOI, elements):
   '''
   RequestService=0x52
   RequestPathSize=len(tagIOI)/2
-  readIOI = pack('<BB', RequestService, RequestPathSize)  # beginning of our req packet
-  readIOI += tagIOI					    # Tag portion of packet
+  readIOI = pack('<BB', RequestService, RequestPathSize)    # beginning of our req packet
+  readIOI += tagIOI                                         # Tag portion of packet
   readIOI += pack('<H', elements)	                    # end of packet
   readIOI += pack('<H', self.Offset)
   readIOI += pack('<H', 0x0000)
