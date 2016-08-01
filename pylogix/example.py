@@ -2,7 +2,7 @@
 Just a few examples of how to do some
 basic things with the PLC
 '''
-from eip import PLC
+from pylogix.eip import PLC
 
 def ex_read(tag):
   '''
@@ -26,7 +26,7 @@ def ex_multiRead():
   tag2 = "ProductPointer"
   ret = comm.MultiRead(tag1, tag2)
   print ret
-  
+
 def ex_write(tag, value):
   '''
   simple tag write
@@ -64,13 +64,13 @@ def ex_getTags():
   ret = comm.GetTagList()
 
   # print out all the tags to a file
-  with open("TagList.txt", "w") as text_file: 
+  with open("TagList.txt", "w") as text_file:
     for tag in ret:
       name = "Name: " + tag.TagName
       dtype = "Type: " + str(tag.DataType)
       offset= "Offset: " + str(tag.Offset)
       end = '\n'
-    
+
       # some tab space formatting
       if len(name) >= 36: tabs = '\t'
       if len(name) < 36 and len(name) >= 32: tabs = '\t'*2
@@ -80,10 +80,10 @@ def ex_getTags():
       if len(name) < 20 and len(name) >= 16: tabs = '\t'*6
       if len(name) < 16 and len(name) >= 12: tabs = '\t'*7
       if len(name) < 12: tabs = '\t'*8
-    
+
       line = name + tabs + dtype + '\t' + offset + end
       text_file.write(line)
-    
+
 # define our communication
 comm = PLC()
 comm.IPAddress = '192.168.1.10'

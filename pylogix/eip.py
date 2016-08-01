@@ -18,7 +18,6 @@
   limitations under the License.
 '''
 
-from PyQt5.QtCore import *
 from datetime import datetime, timedelta
 from pylogix.lgxDevice import *
 from random import randrange
@@ -38,15 +37,17 @@ class PLC():
     '''
     Initialize our parameters
     '''
-    self.IPAddress = ""
+    self.ClientIPAddress = ""
+    self.ServerIPAddress = {}
     self.ProcessorSlot = 0
-    self.Port = 44818
+    self.ClientPort = 44818
+    self.ServerPort = 44817
     self.VendorID = 0x1337
     self.Context = 0x00
     self.ContextPointer = 0
-    self.Socket = socket.socket()
-    self.Socket.settimeout(0.5)
-    self.SocketConnected = False
+    self.ClientSocket = socket.socket()
+    self.ClientSocket.settimeout(0.5)
+    self.ClientSocketConnected = False
     self.OTNetworkConnectionID=None
     self.SessionHandle = 0x0000
     self.SessionRegistered = False
@@ -64,6 +65,8 @@ class PLC():
                     202:(4, "REAL", 'f'),
                     211:(4, "DWORD", 'I'),
                     197:(8, "LINT", 'Q')}
+
+
 
 
   def Read(self, *args):
@@ -136,7 +139,7 @@ def _readTag(self, tag, elements):
   '''
   processes the read request
   '''
-  if not self.SocketConnected: _connect(self)
+  if not self.ClientSocketConnected: _connect(self)
 
 
   t,b,i = TagNameParser(tag, 0)
@@ -151,8 +154,8 @@ def _readTag(self, tag, elements):
 
   readRequest = _addReadIOI(self, tagData, elements)
   eipHeader = _buildEIPHeader(self, readRequest)
-  self.Socket.send(eipHeader)
-  retData = self.Socket.recv(1024)
+  self.ClientSocket.send(eipHeader)
+  retData = self.ClientSocket.recv(1024)
   return _parseReply(self, tag, elements, retData)
 
 
@@ -161,7 +164,7 @@ def _writeTag(self, tag, value, elements):
   '''
   Processes the write request
   '''
-  if not self.SocketConnected: _connect(self)
+  if not self.ClientSocketConnected: _connect(self)
 
 
   t,b,i = TagNameParser(tag, 0)
@@ -197,8 +200,8 @@ def _writeTag(self, tag, value, elements):
 
 
   eipHeader = _buildEIPHeader(self, writeRequest)
-  self.Socket.send(eipHeader)
-  retData = self.Socket.recv(1024)
+  self.ClientSocket.send(eipHeader)
+  retData = self.ClientSocket.recv(1024)
 
 
 
@@ -209,7 +212,7 @@ def _multiRead(self, args):
   serviceSegments = []
   segments = ""
   tagCount = len(args)
-  if not self.SocketConnected: _connect(self)
+  if not self.ClientSocketConnected: _connect(self)
 
 
   for i in xrange(tagCount):
@@ -244,8 +247,8 @@ def _multiRead(self, args):
 
   readRequest = header+segmentCount+offsets+segments
   eipHeader = _buildEIPHeader(self, readRequest)
-  self.Socket.send(eipHeader)
-  retData = self.Socket.recv(1024)
+  self.ClientSocket.send(eipHeader)
+  retData = self.ClientSocket.recv(1024)
 
 
   return MultiParser(self, retData)
@@ -253,8 +256,9 @@ def _multiRead(self, args):
 
 
 def _getPLCTime(self):
-  # Connect to the PLC
-  if not self.SocketConnected: _connect(self)
+  '''Connect to the PLC
+  '''
+  if not self.ClientSocketConnected: _connect(self)
 
 
   AttributeService = 0x03
@@ -285,8 +289,8 @@ def _getPLCTime(self):
   eipHeader = _buildEIPHeader(self, AttributePacket)
 
 
-  self.Socket.send(eipHeader)
-  retData = self.Socket.recv(1024)
+  self.ClientSocket.send(eipHeader)
+  retData = self.ClientSocket.recv(1024)
   # get the time from the packet
   plcTime = unpack_from('<Q', retData, 56)[0]
   # get the timezone offset from the packet (this will include sign)
@@ -306,25 +310,26 @@ def _getPLCTime(self):
 
 
 def _getTagList(self):
-  # The packet has to be assembled a little different in the event
-  # that all of the tags don't fit in a single packet
+  '''The packet has to be assembled a little different in the event
+   that all of the tags don't fit in a single packet
+  '''
 
-  if not self.SocketConnected: _connect(self)
+  if not self.ClientSocketConnected: _connect(self)
 
 
   forwardOpenFrame = _buildTagRequestPacket(self, partial=False)
 
 
-  self.Socket.send(forwardOpenFrame)
-  ret = self.Socket.recv(1024)
+  self.ClientSocket.send(forwardOpenFrame)
+  ret = self.ClientSocket.recv(1024)
   status = unpack_from('<h', ret, 42)[0]
   extractTagPacket(self, ret)
 
 
   while status == 6:
     forwardOpenFrame = _buildTagRequestPacket(self, partial=True)
-    self.Socket.send(forwardOpenFrame)
-    ret = self.Socket.recv(1024)
+    self.ClientSocket.send(forwardOpenFrame)
+    ret = self.ClientSocket.recv(1024)
     extractTagPacket(self, ret)
     status = unpack_from('<h', ret, 42)[0]
     time.sleep(0.25)
@@ -393,27 +398,32 @@ def _connect(self):
   '''
   Open our initial connection to the PLC
   '''
-  self.SocketConnected = False
+  self.ClientSocketConnected = False
+
+
   try:
-    self.Socket.connect((self.IPAddress, self.Port))
-    self.SocketConnected = True
+
+    self.ClientSocket.connect((self.ClientIPAddress, self.ClientPort))
+    self.ClientSocketConnected = True
+
   except:
-    self.SocketConnected = False
-    print ("Failed to connect to", self.IPAddress, ". Abandoning Ship!")
+
+    self.ClientSocketConnected = False
+    print ("Failed to connect to", self.ClientIPAddress, ". Abandoning Ship!")
     sys.exit(0)
 
 
-  if self.SocketConnected:
+  if self.ClientSocketConnected:
     # If our connection was successful, register session
-    self.Socket.send(_buildRegisterSession(self))
-    retData = self.Socket.recv(1024)
+    self.ClientSocket.send(_buildRegisterSession(self))
+    retData = self.ClientSocket.recv(1024)
     self.SessionHandle = unpack_from('<I', retData, 4)[0]
     self.SessionRegistered = True
 
 
-      # Forward Open
-    self.Socket.send(_buildForwardOpenPacket(self))
-    retData = self.Socket.recv(1024)
+    # Forward Open
+    self.ClientSocket.send(_buildForwardOpenPacket(self))
+    retData = self.ClientSocket.recv(1024)
     tempID = unpack_from('<I', retData, 44)
     self.OTNetworkConnectionID = tempID[0]
 
@@ -745,7 +755,6 @@ def _addWriteIOI(self, tagIOI, writeData, dataType, elements):
 
 
 
-
 def _addWriteBitIOI(self, tag, tagIOI, writeData, dataType):
   '''
   This will add the bit level request to the tagIOI
@@ -970,8 +979,8 @@ def _parseReply(self, tag, elements, data):
           readIOI = _addPartialReadIOI(self, tagIOI, elements)
           eipHeader = _buildEIPHeader(self, readIOI)
 
-          self.Socket.send(eipHeader)
-          data = self.Socket.recv(1024)
+          self.ClientSocket.send(eipHeader)
+          data = self.ClientSocket.recv(1024)
           status = unpack_from('<h', data, 48)[0]
           numbytes = len(data)-dataSize
 
@@ -1037,8 +1046,8 @@ def InitialRead(self, tag, baseTag):
   eipHeader = _buildEIPHeader(self, readRequest)
 
   # send our tag read request
-  self.Socket.send(eipHeader)
-  retData = self.Socket.recv(1024)
+  self.ClientSocket.send(eipHeader)
+  retData = self.ClientSocket.recv(1024)
   dataType = unpack_from('<B', retData, 50)[0]
   dataLen = unpack_from('<H', retData, 2)[0] # this is really just used for STRING
   self.KnownTags[baseTag] = (dataType, dataLen)
@@ -1120,6 +1129,8 @@ def MultiParser(self, data):
 
     return reply
 
+
+
 def MakeString(string):
     work = []
     work.append(0x01)
@@ -1133,6 +1144,8 @@ def MakeString(string):
         work.append(0x00)
     return work
 
+
+
 def BitofWord(tag):
     '''
     Test if the user is trying to write to a bit of a word
@@ -1144,6 +1157,8 @@ def BitofWord(tag):
     else:
         return False
 
+
+
 def BitValue(value, bitno):
     '''
     Returns the specific bit of a words value
@@ -1153,6 +1168,8 @@ def BitValue(value, bitno):
         return True
     else:
         return False
+
+
 
 def _buildListIdentity():
     '''
@@ -1180,40 +1197,46 @@ def _buildListIdentity():
                 ListContext3,
                 ListOptions)
 
+
+
 def _parseIdentityResponse(data):
-    # we're going to take the packet and parse all
-    #  the data that is in it.
+  '''we're going to take the packet and parse all
+  #  the data that is in it.
+  '''
 
-    resp = LGXDevice()
-    resp.Length = unpack_from('<H', data, 28)[0]
-    resp.EncapsulationVersion = unpack_from('<H', data, 30)[0]
+  resp = LGXDevice()
+  resp.Length = unpack_from('<H', data, 28)[0]
+  resp.EncapsulationVersion = unpack_from('<H', data, 30)[0]
 
-    longIP = unpack_from('<I', data, 36)[0]
-    resp.IPAddress = socket.inet_ntoa(pack('<L', longIP))
+  longIP = unpack_from('<I', data, 36)[0]
+  resp.IPAddress = socket.inet_ntoa(pack('<L', longIP))
 
-    resp.VendorID = unpack_from('<H', data, 48)[0]
-    resp.Vendor = GetVendor(resp.VendorID)
+  resp.VendorID = unpack_from('<H', data, 48)[0]
+  resp.Vendor = GetVendor(resp.VendorID)
 
-    resp.DeviceID = unpack_from('<H', data, 50)[0]
-    resp.Device = GetDevice(resp.DeviceID)
+  resp.DeviceID = unpack_from('<H', data, 50)[0]
+  resp.Device = GetDevice(resp.DeviceID)
 
-    resp.ProductCode = unpack_from('<H', data, 52)[0]
-    major = unpack_from('<B', data, 54)[0]
-    minor = unpack_from('<B', data, 55)[0]
-    resp.Revision = str(major) + '.' + str(minor)
+  resp.ProductCode = unpack_from('<H', data, 52)[0]
+  major = unpack_from('<B', data, 54)[0]
+  minor = unpack_from('<B', data, 55)[0]
+  resp.Revision = str(major) + '.' + str(minor)
 
-    resp.Status = unpack_from('<H', data, 56)[0]
-    resp.SerialNumber = hex(unpack_from('<I', data, 58)[0])
-    resp.ProductNameLength = unpack_from('<B', data, 62)[0]
-    resp.ProductName = data[63:63+resp.ProductNameLength]
+  resp.Status = unpack_from('<H', data, 56)[0]
+  resp.SerialNumber = hex(unpack_from('<I', data, 58)[0])
+  resp.ProductNameLength = unpack_from('<B', data, 62)[0]
+  resp.ProductName = data[63:63+resp.ProductNameLength]
 
-    state = data[-1:]
-    resp.State = unpack_from('<B', state, 0)[0]
+  state = data[-1:]
+  resp.State = unpack_from('<B', state, 0)[0]
 
-    return resp
+  return resp
+
+
 
 def extractTagPacket(self, data):
-  # the first tag in a packet starts at byte 44
+  ''' the first tag in a packet starts at byte 44
+  '''
   packetStart = 44
 
   while packetStart < len(data):
@@ -1231,6 +1254,8 @@ def extractTagPacket(self, data):
     # increment ot the next tag in the packet
     packetStart = packetStart+tagLen+22
 
+
+
 def parseLgxTag(packet):
     tag = LGXTag()
     length = unpack_from('<H', packet, 20)[0]
@@ -1239,6 +1264,8 @@ def parseLgxTag(packet):
     tag.DataType = unpack_from('<B', packet, 4)[0]
 
     return tag
+
+
 
 cipErrorCodes = {0x00: 'Success',
                 0x01: 'Connection failure',
@@ -1285,6 +1312,7 @@ cipErrorCodes = {0x00: 'Success',
                 0x2A: 'Group 2 only server general failure',
                 0x2B: 'Unknown Modbus error',
                 0x2C: 'Attribute not gettable'}
+
 
 # Context values passed to the PLC when reading/writing
 context_dict = {0: 0x6572276557,
