@@ -31,7 +31,7 @@ from threading import Thread
 taglist = []
 
 
-class PLC():
+class PLC_In():
 
 
   def __init__(self):
@@ -75,16 +75,16 @@ class PLC():
     # Start listening on socket
     #self.ServerSocket.listen(10)
 
-  def Client_Thread(self, *args):
+  #def Client_Thread(self, *args):
     '''
     Function for handling connections from the PLCs
     Used to create threads
     '''
-    if len(args) == 1:
-      while True:
+    #if len(args) == 1:
+      #while True:
         # Recieve from client
 
-        data = args[0].recv(1024)
+        #data = args[0].recv(1024)
         # Find the tag requested from the data recieved
         # Check if the tag format is already known
           # If not, query to get the tag format and store it
@@ -450,12 +450,13 @@ def _connect(self):
     print ("Failed to connect to", self.IPAddress, ". Abandoning Ship!")
     sys.exit(0)
 
-
+  ''' With Omron FINS command, there is no session handle, just a straight connection
   if self.SocketConnected:
+
     # If our connection was successful, register session
     self.Socket.send(_buildRegisterSession(self))
     retData = self.Socket.recv(1024)
-    self.SessionHandle = unpack_from('<I', retData, 4)[0]
+    self.SessionHandle = unpack_from('<I', retData, 5)[0]
     self.SessionRegistered = True
 
 
@@ -464,33 +465,26 @@ def _connect(self):
     retData = self.Socket.recv(1024)
     tempID = unpack_from('<I', retData, 44)
     self.OTNetworkConnectionID = tempID[0]
-
+  '''
 
 
 def _buildRegisterSession(self):
   '''
   Register our CIP connection
   '''
-  EIPCommand = 0x0065                       #(H)Register Session Command   (Vol 2 2-3.2)
-  EIPLength = 0x0004                        #(H)Lenght of Payload          (2-3.3)
-  EIPSessionHandle = self.SessionHandle     #(I)Session Handle             (2-3.4)
-  EIPStatus = 0x0000                        #(I)Status always 0x00         (2-3.5)
-  EIPContext = self.Context                 #(Q)                           (2-3.6)
-  EIPOptions = 0x0000                       #(I)Options always 0x00        (2-3.7)
-                                            #Begin Command Specific Data
-  EIPProtocolVersion = 0x01                 #(H)Always 0x01                (2-4.7)
-  EIPOptionFlag = 0x00                      #(H)Always 0x00                (2-4.7)
+  EIPHeader            = 0x46494e53   #(I)ASCII code: 'FINS'                                (7-4-2, p 177)
+  EIPLength            = 0x0000000C   #(I)12 bytes: Length of data from command onwards
+  EIPCommand           = 0x00000000   #(I)
+  EIPErrorCode         = 0x00000000   #(I) Not used, so does not require checking by server
+  EIPClientNodeAddress = 0x00000000   #(I) Automatically obtained
 
 
-  return pack('<HHIIQIHH',
-              EIPCommand,
+  return pack('<IIIII',
+              EIPHeader,
               EIPLength,
-              EIPSessionHandle,
-              EIPStatus,
-              EIPContext,
-              EIPOptions,
-              EIPProtocolVersion,
-              EIPOptionFlag)
+              EIPCommand,
+              EIPErrorCode,
+              EIPClientNodeAddress)
 
 
 
@@ -507,7 +501,7 @@ def _buildForwardOpenPacket(self):
 def _buildCIPForwardOpen(self):
   '''
   Forward Open happens after a connection is made,
-  this will sequp the CIP connection parameters
+  this will setup the CIP connection parameters
   '''
   CIPService = 0x54                                    #(B) CIP OpenForward        Vol 3 (3-5.5.2)(3-5.5)
   CIPPathSize = 0x02                                   #(B) Request Path zize              (2-4.1)
@@ -582,7 +576,7 @@ def _buildEIPSendRRDataHeader(self, frameLen):
   EIPContext = self.Context                       #(Q)
   EIPOptions = 0x00                               #(I)
                                                   #Begin Command Specific Data
-  EIPInterfaceHandle = 0x00                       #(I) Interface Handel       (2-4.7.2)
+  EIPInterfaceHandle = 0x00                       #(I) Interface Handle       (2-4.7.2)
   EIPTimeout = 0x00                               #(H) Always 0x00
   EIPItemCount = 0x02                             #(H) Always 0x02 for our purposes
   EIPItem1Type = 0x00                             #(H) Null Item Type
